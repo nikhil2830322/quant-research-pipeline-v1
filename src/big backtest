@@ -1,5 +1,3 @@
-part 1
-
 import pandas as pd
 import numpy as np
 import yfinance as yf
@@ -28,7 +26,7 @@ sectors = {
 }
 
 # ==========================================
-# LOAD DATA
+# DATA LOADING
 # ==========================================
 def load_data():
     print("Downloading historical data...")
@@ -36,7 +34,7 @@ def load_data():
     return data
 
 # ==========================================
-# BUILD INDICATORS
+# INDICATORS
 # ==========================================
 def build_indicators(data):
     close = data['Close']
@@ -49,6 +47,7 @@ def build_indicators(data):
     for t in tickers:
         df = pd.DataFrame(index=close.index)
         df['Close'] = close[t]
+        df['Open'] = data['Open'][t]
         df['High'] = high[t]
         df['Low'] = low[t]
         df['Vol'] = vol[t]
@@ -88,14 +87,13 @@ def build_indicators(data):
 
         ind[t] = df
 
-    # Market filter
     sp500 = close['^GSPC']
     sp500_sma200 = sp500.rolling(200).mean()
 
     return ind, sp500, sp500_sma200
 
 # ==========================================
-# SHARED UTILITY: APPLY FRICTION
+# UTILITIES
 # ==========================================
 def apply_entry_friction(price):
     return price * (1 + SLIPPAGE_ENTRY)
@@ -103,44 +101,29 @@ def apply_entry_friction(price):
 def apply_exit_friction(price):
     return price * (1 - SLIPPAGE_EXIT)
 
-# ==========================================
-# SHARED UTILITY: CASH DRAG
-# ==========================================
 def apply_cash_drag(cash):
     return cash * (1 + DAILY_RF)
 
-# ==========================================
-# SHARED UTILITY: GAP-DOWN EXIT
-# ==========================================
 def gap_down_exit(open_price, stop_price, close_price):
     if open_price < stop_price:
         return open_price
     return close_price
 
-# ==========================================
-# SHARED UTILITY: POSITION SIZING
-# ==========================================
 def position_size(entry_price, stop_price, equity):
     risk_dist = entry_price - stop_price
     if risk_dist <= 0:
         return 0
-
     risk_dollars = equity * RISK_PER_TRADE
     shares_risk = risk_dollars / risk_dist
-
     max_alloc = equity * MAX_ALLOC_FRACTION
     shares_alloc = max_alloc / entry_price
-
     return int(min(shares_risk, shares_alloc))
 
-# ==========================================
-# SHARED UTILITY: SECTOR CAP CHECK
-# ==========================================
 def sector_cap_reached(open_positions, sector):
     count = sum(1 for p in open_positions.values() if p['sector'] == sector)
     return count >= MAX_SECTOR_POSITIONS
 
-    # ==========================================
+# ==========================================
 # MODEL A — YANG (Trend Following)
 # ==========================================
 def run_yang(ind, data, sp500, sp500_sma200):
@@ -151,44 +134,33 @@ def run_yang(ind, data, sp500, sp500_sma200):
     equity_curve = []
     daily_returns = []
 
-    dates = ind[tickers[0]].index[200:]  # start after indicators mature
+    dates = ind[tickers[0]].index[200:]
 
     for i in range(1, len(dates)):
         date = dates[i]
         prev_date = dates[i-1]
 
-        # Apply cash drag
         cash = apply_cash_drag(cash)
-
-        # Market filter
         market_ok = sp500.loc[prev_date] > sp500_sma200.loc[prev_date]
 
-        # ============================
-        # A. EXITS
-        # ============================
+        # EXITS
         to_close = []
         for t, pos in open_positions.items():
             df = ind[t]
             close_price = df.loc[date, 'Close']
             sma50 = df.loc[date, 'SMA50']
-
-            # Exit conditions
             if close_price < sma50 or close_price <= pos['stop']:
                 to_close.append(t)
 
         for t in to_close:
             pos = open_positions.pop(t)
             df = ind[t]
-
-            open_price = data['Open'][t].loc[date]
+            open_price = df.loc[date, 'Open']
             close_price = df.loc[date, 'Close']
-
             exit_price = gap_down_exit(open_price, pos['stop'], close_price)
             exit_price = apply_exit_friction(exit_price)
-
             cash += pos['shares'] * exit_price
             cash -= COMMISSION
-
             pnl = (exit_price - pos['entry']) * pos['shares']
             trade_log.append({
                 'ticker': t,
@@ -200,53 +172,35 @@ def run_yang(ind, data, sp500, sp500_sma200):
                 'pnl': pnl
             })
 
-        # ============================
-        # B. ENTRIES
-        # ============================
+        # ENTRIES
         if market_ok and len(open_positions) < MAX_TOTAL_POSITIONS:
-
             for t in tickers:
                 if t in open_positions:
                     continue
-
                 df = ind[t]
-
-                # Yesterday's values
-                y_close = df.loc[prev_date, 'Close']
-                y_sma50 = df.loc[prev_date, 'SMA50']
-                y_prior_high = df.loc[prev_date, 'Prior20High']
-                y_vol = df.loc[prev_date, 'Vol']
-                y_avgvol30 = df.loc[prev_date, 'AvgVol30']
-                y_atr = df.loc[prev_date, 'ATR14']
-
-                # Sector cap
+                y = df.loc[prev_date]
                 sector = sectors[t]
                 if sector_cap_reached(open_positions, sector):
                     continue
 
-                # Entry Module A (High Volume Breakout)
                 signal_a = (
-                    y_close > y_sma50 and
-                    y_vol > y_avgvol30 and
-                    y_close > y_prior_high
+                    y['Close'] > y['SMA50'] and
+                    y['Vol'] > y['AvgVol30'] and
+                    y['Close'] > y['Prior20High']
                 )
 
-                # Entry Module B (Low Volume Pullback)
                 signal_b = (
-                    y_close > y_sma50 and
-                    y_vol < y_avgvol30 and
-                    y_close <= (df.loc[prev_date, 'SMA20'] + 2 * y_atr)
+                    y['Close'] > y['SMA50'] and
+                    y['Vol'] < y['AvgVol30'] and
+                    y['Close'] <= (y['SMA20'] + 2 * y['ATR14'])
                 )
 
                 if signal_a or signal_b:
-                    entry_price = data['Open'][t].loc[date]
+                    entry_price = df.loc[date, 'Open']
                     entry_price = apply_entry_friction(entry_price)
-
-                    stop = entry_price - (2 * y_atr)
+                    stop = entry_price - (2 * y['ATR14'])
                     shares = position_size(entry_price, stop, equity)
-
                     total_cost = shares * entry_price + COMMISSION
-
                     if shares > 0 and cash >= total_cost:
                         cash -= total_cost
                         open_positions[t] = {
@@ -257,19 +211,15 @@ def run_yang(ind, data, sp500, sp500_sma200):
                             'entry_date': date
                         }
 
-        # ============================
-        # C. EQUITY UPDATE
-        # ============================
+        # EQUITY UPDATE
         open_val = sum(
             open_positions[t]['shares'] * ind[t].loc[date, 'Close']
             for t in open_positions
         )
         prev_equity = equity
         equity = cash + open_val
-
         if i > 1:
             daily_returns.append((equity - prev_equity) / prev_equity)
-
         equity_curve.append(equity)
 
     return {
@@ -279,387 +229,333 @@ def run_yang(ind, data, sp500, sp500_sma200):
         'daily_returns': daily_returns
     }
 
-import pandas as pd
-import numpy as np
-import yfinance as yf
-import matplotlib.pyplot as plt
-
 # ==========================================
-# SHARED PARAMETERS
+# MODEL B — ZHAN (Volatility Expansion)
 # ==========================================
-START_CAPITAL = 100000
-RISK_PER_TRADE = 0.01
-MAX_SECTOR_POSITIONS = 2
-MAX_TOTAL_POSITIONS = 6
-MAX_ALLOC_FRACTION = 1/6
-SLIPPAGE_ENTRY = 0.0005
-SLIPPAGE_EXIT = 0.0005
-COMMISSION = 1.0
-RISK_FREE_ANNUAL = 0.045
-DAILY_RF = RISK_FREE_ANNUAL / 252
+def run_zhan(ind, data, sp500, sp500_sma200):
+    cash = START_CAPITAL
+    equity = START_CAPITAL
+    open_positions = {}
+    trade_log = []
+    equity_curve = []
+    daily_returns = []
 
-tickers = ['MSFT','AMZN','JPM','UNH','XOM','WMT','NVDA','AMD','META','TSLA']
-sectors = {
-    'MSFT':'Tech','NVDA':'Tech','AMD':'Tech','META':'Tech',
-    'AMZN':'Consumer','TSLA':'Consumer','WMT':'Consumer',
-    'JPM':'Finance','UNH':'Healthcare','XOM':'Energy'
-}
-
-# ==========================================
-# ENGINE FUNCTIONS (Part 1)
-# ==========================================
-def load_data():
-    data = yf.download(tickers + ['^GSPC'], start="2023-01-01", end="2026-07-03")
-    return data.swaplevel(0, 1, axis=1)
-
-def build_indicators(data):
-    ind = {}
-    for t in tickers:
-        df = pd.DataFrame(index=data.index)
-        df['Close'] = data[('Close', t)]
-        df['High'] = data[('High', t)]
-        df['Low'] = data[('Low', t)]
-        df['Vol'] = data[('Volume', t)]
-        df['SMA50'] = df['Close'].rolling(50).mean()
-        df['SMA20'] = df['Close'].rolling(20).mean()
-        df['EMA20'] = df['Close'].ewm(span=20).mean()
-        df['SMA5'] = df['Close'].rolling(5).mean()
-        df['SMA200'] = df['Close'].rolling(200).mean()
-        df['AvgVol30'] = df['Vol'].rolling(30).mean()
-        df['Prior20High'] = df['Close'].rolling(20).max().shift(1)
-        tr1 = df['High'] - df['Low']
-        tr2 = (df['High'] - df['Close'].shift(1)).abs()
-        tr3 = (df['Low'] - df['Close'].shift(1)).abs()
-        df['ATR14'] = pd.concat([tr1, tr2, tr3], axis=1).max(axis=1).rolling(14).mean()
-        delta = df['Close'].diff()
-        gain = delta.clip(lower=0)
-        loss = -delta.clip(upper=0)
-        rs = (gain.rolling(2).mean()) / (loss.rolling(2).mean()).replace(0, np.nan)
-        df['RSI2'] = 100 - (100 / (1 + rs))
-        df['KC_UPPER'] = df['EMA20'] + 2 * df['ATR14']
-        df['KC_LOWER'] = df['EMA20'] - 2 * df['ATR14']
-        ind[t] = df
-    sp500 = data[('Close', '^GSPC')]
-    sp500_sma200 = sp500.rolling(200).mean()
-    return ind, sp500, sp500_sma200
-
-def apply_entry_friction(price): return price * (1 + SLIPPAGE_ENTRY)
-def apply_exit_friction(price): return price * (1 - SLIPPAGE_EXIT)
-def apply_cash_drag(cash): return cash * (1 + DAILY_RF)
-def gap_down_exit(open_price, stop_price, close_price): return open_price if open_price < stop_price else close_price
-
-def position_size(entry_price, stop_price, equity):
-    risk_dist = entry_price - stop_price
-    if risk_dist <= 0: return 0
-    shares_risk = (equity * RISK_PER_TRADE) / risk_dist
-    shares_alloc = (equity * MAX_ALLOC_FRACTION) / entry_price
-    return int(min(shares_risk, shares_alloc))
-
-def sector_cap_reached(open_positions, sector):
-    return sum(1 for p in open_positions.values() if p['sector'] == sector) >= MAX_SECTOR_POSITIONS
-
-# ==========================================
-# STRATEGY FUNCTIONS
-# ==========================================
-# [Insert run_yang, run_zhan, and run_yin functions here from your previous messages]
-
-# ==========================================
-# TOURNAMENT RUNNER
-# ==========================================
-raw_data = load_data()
-ind, sp500, sp500_sma200 = build_indicators(raw_data)
-
-results = [
-    run_yang(ind, raw_data, sp500, sp500_sma200),
-    run_zhan(ind, raw_data, sp500, sp500_sma200),
-    run_yin(ind, raw_data, sp500, sp500_sma200)
-]
-
-plt.figure(figsize=(14,7))
-for res in results: plt.plot(res['equity_curve'], label=res['name'])
-plt.title("Tournament: Yang vs Zhan vs Yin")
-plt.legend()
-plt.show()
-
-import pandas as pd
-import numpy as np
-import yfinance as yf
-import matplotlib.pyplot as plt
-
-# ==========================================
-# SHARED PARAMETERS
-# ==========================================
-START_CAPITAL = 100000
-RISK_PER_TRADE = 0.01
-MAX_SECTOR_POSITIONS = 2
-MAX_TOTAL_POSITIONS = 6
-MAX_ALLOC_FRACTION = 1/6
-SLIPPAGE_ENTRY = 0.0005
-SLIPPAGE_EXIT = 0.0005
-COMMISSION = 1.0
-RISK_FREE_ANNUAL = 0.045
-DAILY_RF = RISK_FREE_ANNUAL / 252
-
-tickers = ['MSFT','AMZN','JPM','UNH','XOM','WMT','NVDA','AMD','META','TSLA']
-sectors = {
-    'MSFT':'Tech','NVDA':'Tech','AMD':'Tech','META':'Tech',
-    'AMZN':'Consumer','TSLA':'Consumer','WMT':'Consumer',
-    'JPM':'Finance','UNH':'Healthcare','XOM':'Energy'
-}
-
-# ==========================================
-# ENGINE FUNCTIONS
-# ==========================================
-def load_data():
-    data = yf.download(tickers + ['^GSPC'], start="2023-01-01", end="2026-07-03")
-    return data.swaplevel(0, 1, axis=1)
-
-def build_indicators(data):
-    ind = {}
-    for t in tickers:
-        df = pd.DataFrame(index=data.index)
-        df['Close'] = data[('Close', t)]
-        df['Open'] = data[('Open', t)]
-        df['High'] = data[('High', t)]
-        df['Low'] = data[('Low', t)]
-        df['Vol'] = data[('Volume', t)]
-        df['SMA50'] = df['Close'].rolling(50).mean()
-        df['SMA20'] = df['Close'].rolling(20).mean()
-        df['EMA20'] = df['Close'].ewm(span=20).mean()
-        df['SMA5'] = df['Close'].rolling(5).mean()
-        df['SMA200'] = df['Close'].rolling(200).mean()
-        df['AvgVol30'] = df['Vol'].rolling(30).mean()
-        df['Prior20High'] = df['Close'].rolling(20).max().shift(1)
-        tr = pd.concat([(df['High']-df['Low']), (df['High']-df['Close'].shift(1)).abs(), (df['Low']-df['Close'].shift(1)).abs()], axis=1).max(axis=1)
-        df['ATR14'] = tr.rolling(14).mean()
-        delta = df['Close'].diff()
-        rs = (delta.clip(lower=0).rolling(2).mean()) / (-delta.clip(upper=0).rolling(2).mean()).replace(0, np.nan)
-        df['RSI2'] = 100 - (100 / (1 + rs))
-        df['KC_UPPER'] = df['EMA20'] + 2 * df['ATR14']
-        df['KC_LOWER'] = df['EMA20'] - 2 * df['ATR14']
-        ind[t] = df
-    return ind, data[('Close', '^GSPC')], data[('Close', '^GSPC')].rolling(200).mean()
-
-def apply_entry_friction(p): return p * (1 + SLIPPAGE_ENTRY)
-def apply_exit_friction(p): return p * (1 - SLIPPAGE_EXIT)
-def apply_cash_drag(c): return c * (1 + DAILY_RF)
-def gap_down_exit(o, s, c): return o if o < s else c
-def position_size(e, s, eq):
-    risk = e - s
-    if risk <= 0: return 0
-    return int(min((eq * RISK_PER_TRADE)/risk, (eq * MAX_ALLOC_FRACTION)/e))
-
-def sector_cap_reached(pos, sect): return sum(1 for p in pos.values() if p['sector'] == sect) >= MAX_SECTOR_POSITIONS
-
-# ==========================================
-# STRATEGY FUNCTIONS
-# ==========================================
-def run_yang(ind, data, sp500, sp500_sma200):
-    cash, equity, open_positions, trade_log, equity_curve, daily_returns = START_CAPITAL, START_CAPITAL, {}, [], [], []
     dates = ind[tickers[0]].index[200:]
+
     for i in range(1, len(dates)):
-        date, prev_date = dates[i], dates[i-1]
+        date = dates[i]
+        prev_date = dates[i-1]
+
         cash = apply_cash_drag(cash)
         market_ok = sp500.loc[prev_date] > sp500_sma200.loc[prev_date]
-        to_close = [t for t, pos in open_positions.items() if ind[t].loc[date, 'Close'] < ind[t].loc[date, 'SMA50'] or ind[t].loc[date, 'Close'] <= pos['stop']]
+
+        # EXITS
+        to_close = []
+        for t, pos in open_positions.items():
+            df = ind[t]
+            close_price = df.loc[date, 'Close']
+            kc_lower = df.loc[date, 'KC_LOWER']
+            if close_price < kc_lower or close_price <= pos['stop']:
+                to_close.append(t)
+
         for t in to_close:
             pos = open_positions.pop(t)
-            exit_p = apply_exit_friction(gap_down_exit(data[('Open', t)].loc[date], pos['stop'], ind[t].loc[date, 'Close']))
-            cash += (pos['shares'] * exit_p) - COMMISSION
-            trade_log.append({'ticker': t, 'pnl': (exit_p - pos['entry']) * pos['shares']})
+            df = ind[t]
+            open_price = df.loc[date, 'Open']
+            close_price = df.loc[date, 'Close']
+            exit_price = gap_down_exit(open_price, pos['stop'], close_price)
+            exit_price = apply_exit_friction(exit_price)
+            cash += pos['shares'] * exit_price
+            cash -= COMMISSION
+            pnl = (exit_price - pos['entry']) * pos['shares']
+            trade_log.append({
+                'ticker': t,
+                'entry_date': pos['entry_date'],
+                'exit_date': date,
+                'entry_price': pos['entry'],
+                'exit_price': exit_price,
+                'shares': pos['shares'],
+                'pnl': pnl
+            })
+
+        # ENTRIES
         if market_ok and len(open_positions) < MAX_TOTAL_POSITIONS:
             for t in tickers:
-                if t not in open_positions and not sector_cap_reached(open_positions, sectors[t]):
-                    df = ind[t]
-                    y = df.loc[prev_date]
-                    if (y['Close'] > y['SMA50'] and y['Vol'] > y['AvgVol30'] and y['Close'] > y['Prior20High']) or (y['Close'] > y['SMA50'] and y['Vol'] < y['AvgVol30'] and y['Close'] <= (y['SMA20'] + 2*y['ATR14'])):
-                        entry_p = apply_entry_friction(data[('Open', t)].loc[date])
-                        stop = entry_p - (2 * y['ATR14'])
-                        shares = position_size(entry_p, stop, equity)
-                        if shares > 0 and cash >= (shares * entry_p + COMMISSION):
-                            cash -= (shares * entry_p + COMMISSION)
-                            open_positions[t] = {'entry': entry_p, 'stop': stop, 'shares': shares, 'sector': sectors[t], 'entry_date': date}
-        equity = cash + sum(open_positions[t]['shares'] * ind[t].loc[date, 'Close'] for t in open_positions)
-        equity_curve.append(equity)
-    return {'name': 'Yang', 'equity_curve': equity_curve}
+                if t in open_positions:
+                    continue
+                df = ind[t]
+                y = df.loc[prev_date]
+                sector = sectors[t]
+                if sector_cap_reached(open_positions, sector):
+                    continue
 
-def run_zhan(ind, data, sp500, sp500_sma200):
-    cash, equity, open_positions, equity_curve = START_CAPITAL, START_CAPITAL, {}, []
-    dates = ind[tickers[0]].index[200:]
-    for i in range(1, len(dates)):
-        date, prev_date = dates[i], dates[i-1]
-        cash = apply_cash_drag(cash)
-        to_close = [t for t, pos in open_positions.items() if ind[t].loc[date, 'Close'] < ind[t].loc[date, 'KC_LOWER'] or ind[t].loc[date, 'Close'] <= pos['stop']]
-        for t in to_close:
-            pos = open_positions.pop(t)
-            exit_p = apply_exit_friction(gap_down_exit(data[('Open', t)].loc[date], pos['stop'], ind[t].loc[date, 'Close']))
-            cash += (pos['shares'] * exit_p) - COMMISSION
-        if sp500.loc[prev_date] > sp500_sma200.loc[prev_date] and len(open_positions) < MAX_TOTAL_POSITIONS:
-            for t in tickers:
-                if t not in open_positions and not sector_cap_reached(open_positions, sectors[t]):
-                    df = ind[t]
-                    curr_idx = df.index.get_loc(prev_date)
-                    cons = all(df.iloc[curr_idx-j]['Close'] < df.iloc[curr_idx-j]['KC_UPPER'] and df.iloc[curr_idx-j]['Close'] > df.iloc[curr_idx-j]['KC_LOWER'] for j in range(1,4))
-                    y = df.loc[prev_date]
-                    if (y['Close'] > y['KC_UPPER'] and y['Vol'] > y['AvgVol30'] and cons) or (y['Close'] > y['EMA20'] and y['Vol'] < y['AvgVol30']):
-                        entry_p = apply_entry_friction(data[('Open', t)].loc[date])
-                        stop = entry_p - (1.5 * y['ATR14'])
-                        shares = position_size(entry_p, stop, equity)
-                        if shares > 0 and cash >= (shares * entry_p + COMMISSION):
-                            cash -= (shares * entry_p + COMMISSION)
-                            open_positions[t] = {'entry': entry_p, 'stop': stop, 'shares': shares, 'sector': sectors[t]}
-        equity = cash + sum(open_positions[t]['shares'] * ind[t].loc[date, 'Close'] for t in open_positions)
-        equity_curve.append(equity)
-    return {'name': 'Zhan', 'equity_curve': equity_curve}
+                # Consolidation: last 3 days inside bands
+                idx = df.index.get_loc(prev_date)
+                if idx < 4:
+                    cons = False
+                else:
+                    cons = True
+                    for j in range(1, 4):
+                        c = df.iloc[idx - j]['Close']
+                        if not (c < df.iloc[idx - j]['KC_UPPER'] and c > df.iloc[idx - j]['KC_LOWER']):
+                            cons = False
+                            break
 
+                signal_a = (
+                    y['Close'] > y['KC_UPPER'] and
+                    y['Vol'] > y['AvgVol30'] and
+                    cons
+                )
+
+                signal_b = (
+                    y['Close'] > y['EMA20'] and
+                    y['Vol'] < y['AvgVol30']
+                )
+
+                if signal_a or signal_b:
+                    entry_price = df.loc[date, 'Open']
+                    entry_price = apply_entry_friction(entry_price)
+                    stop = entry_price - (1.5 * y['ATR14'])
+                    shares = position_size(entry_price, stop, equity)
+                    total_cost = shares * entry_price + COMMISSION
+                    if shares > 0 and cash >= total_cost:
+                        cash -= total_cost
+                        open_positions[t] = {
+                            'entry': entry_price,
+                            'stop': stop,
+                            'shares': shares,
+                            'sector': sector,
+                            'entry_date': date
+                        }
+
+        # EQUITY UPDATE
+        open_val = sum(
+            open_positions[t]['shares'] * ind[t].loc[date, 'Close']
+            for t in open_positions
+        )
+        prev_equity = equity
+        equity = cash + open_val
+        if i > 1:
+            daily_returns.append((equity - prev_equity) / prev_equity)
+        equity_curve.append(equity)
+
+    return {
+        'name': 'Zhan',
+        'equity_curve': equity_curve,
+        'trade_log': trade_log,
+        'daily_returns': daily_returns
+    }
+
+# ==========================================
+# MODEL C — YIN (Mean Reversion)
+# ==========================================
 def run_yin(ind, data, sp500, sp500_sma200):
-    cash, equity, open_positions, equity_curve = START_CAPITAL, START_CAPITAL, {}, []
+    cash = START_CAPITAL
+    equity = START_CAPITAL
+    open_positions = {}
+    trade_log = []
+    equity_curve = []
+    daily_returns = []
+
     dates = ind[tickers[0]].index[200:]
+
     for i in range(1, len(dates)):
-        date, prev_date = dates[i], dates[i-1]
+        date = dates[i]
+        prev_date = dates[i-1]
+
         cash = apply_cash_drag(cash)
-        to_close = [t for t, pos in open_positions.items() if (dates.get_loc(date) - dates.get_loc(pos['entry_date'])) >= 4 or ind[t].loc[date, 'Close'] > ind[t].loc[date, 'SMA5'] or ind[t].loc[date, 'Close'] <= pos['stop']]
+        market_ok = sp500.loc[prev_date] > sp500_sma200.loc[prev_date]
+
+        # EXITS
+        to_close = []
+        for t, pos in open_positions.items():
+            df = ind[t]
+            close_price = df.loc[date, 'Close']
+            sma5 = df.loc[date, 'SMA5']
+            # time stop: 4 days
+            if (date - pos['entry_date']).days >= 4:
+                to_close.append(t)
+            elif close_price > sma5 or close_price <= pos['stop']:
+                to_close.append(t)
+
         for t in to_close:
             pos = open_positions.pop(t)
-            exit_p = apply_exit_friction(gap_down_exit(data[('Open', t)].loc[date], pos['stop'], ind[t].loc[date, 'Close']))
-            cash += (pos['shares'] * exit_p) - COMMISSION
-        if sp500.loc[prev_date] > sp500_sma200.loc[prev_date] and len(open_positions) < MAX_TOTAL_POSITIONS:
+            df = ind[t]
+            open_price = df.loc[date, 'Open']
+            close_price = df.loc[date, 'Close']
+            exit_price = gap_down_exit(open_price, pos['stop'], close_price)
+            exit_price = apply_exit_friction(exit_price)
+            cash += pos['shares'] * exit_price
+            cash -= COMMISSION
+            pnl = (exit_price - pos['entry']) * pos['shares']
+            trade_log.append({
+                'ticker': t,
+                'entry_date': pos['entry_date'],
+                'exit_date': date,
+                'entry_price': pos['entry'],
+                'exit_price': exit_price,
+                'shares': pos['shares'],
+                'pnl': pnl
+            })
+
+        # ENTRIES
+        if market_ok and len(open_positions) < MAX_TOTAL_POSITIONS:
             for t in tickers:
-                if t not in open_positions and not sector_cap_reached(open_positions, sectors[t]):
-                    y = ind[t].loc[prev_date]
-                    if y['Close'] > y['SMA200'] and (y['RSI2'] < 10 or y['RSI2'] < 5):
-                        entry_p = apply_entry_friction(data[('Open', t)].loc[date])
-                        stop = entry_p - (1.0 * y['ATR14'])
-                        shares = position_size(entry_p, stop, equity)
-                        if shares > 0 and cash >= (shares * entry_p + COMMISSION):
-                            cash -= (shares * entry_p + COMMISSION)
-                            open_positions[t] = {'entry': entry_p, 'stop': stop, 'shares': shares, 'sector': sectors[t], 'entry_date': date}
-        equity = cash + sum(open_positions[t]['shares'] * ind[t].loc[date, 'Close'] for t in open_positions)
+                if t in open_positions:
+                    continue
+                df = ind[t]
+                y = df.loc[prev_date]
+                sector = sectors[t]
+                if sector_cap_reached(open_positions, sector):
+                    continue
+
+                signal_a = (y['Close'] > y['SMA200'] and y['RSI2'] < 10)
+                signal_b = (y['Close'] > y['SMA200'] and y['RSI2'] < 5)
+
+                if signal_a or signal_b:
+                    entry_price = df.loc[date, 'Open']
+                    entry_price = apply_entry_friction(entry_price)
+                    stop = entry_price - (1.0 * y['ATR14'])
+                    shares = position_size(entry_price, stop, equity)
+                    total_cost = shares * entry_price + COMMISSION
+                    if shares > 0 and cash >= total_cost:
+                        cash -= total_cost
+                        open_positions[t] = {
+                            'entry': entry_price,
+                            'stop': stop,
+                            'shares': shares,
+                            'sector': sector,
+                            'entry_date': date
+                        }
+
+        # EQUITY UPDATE
+        open_val = sum(
+            open_positions[t]['shares'] * ind[t].loc[date, 'Close']
+            for t in open_positions
+        )
+        prev_equity = equity
+        equity = cash + open_val
+        if i > 1:
+            daily_returns.append((equity - prev_equity) / prev_equity)
         equity_curve.append(equity)
-    return {'name': 'Yin', 'equity_curve': equity_curve}
+
+    return {
+        'name': 'Yin',
+        'equity_curve': equity_curve,
+        'trade_log': trade_log,
+        'daily_returns': daily_returns
+    }
 
 # ==========================================
-# TOURNAMENT RUNNER
-# ==========================================
-raw_data = load_data()
-ind, sp500, sp500_sma200 = build_indicators(raw_data)
-results = [run_yang(ind, raw_data, sp500, sp500_sma200), run_zhan(ind, raw_data, sp500, sp500_sma200), run_yin(ind, raw_data, sp500, sp500_sma200)]
-
-plt.figure(figsize=(14,7))
-for res in results: plt.plot(res['equity_curve'], label=res['name'])
-plt.title("Tournament: Yang vs Zhan vs Yin")
-plt.legend()
-plt.show()
-
-import pandas as pd
-import numpy as np
-import yfinance as yf
-import matplotlib.pyplot as plt
-
-# ==========================================
-# 1. SHARED PARAMETERS & ENGINE
-# ==========================================
-START_CAPITAL = 100000
-RISK_PER_TRADE = 0.01
-MAX_SECTOR_POSITIONS = 2
-MAX_TOTAL_POSITIONS = 6
-MAX_ALLOC_FRACTION = 1/6
-SLIPPAGE_ENTRY = 0.0005
-SLIPPAGE_EXIT = 0.0005
-COMMISSION = 1.0
-RISK_FREE_ANNUAL = 0.045
-DAILY_RF = RISK_FREE_ANNUAL / 252
-
-tickers = ['MSFT','AMZN','JPM','UNH','XOM','WMT','NVDA','AMD','META','TSLA']
-sectors = {'MSFT':'Tech','NVDA':'Tech','AMD':'Tech','META':'Tech','AMZN':'Consumer','TSLA':'Consumer','WMT':'Consumer','JPM':'Finance','UNH':'Healthcare','XOM':'Energy'}
-
-def load_data():
-    data = yf.download(tickers + ['^GSPC'], start="2023-01-01", end="2026-07-03")
-    return data.swaplevel(0, 1, axis=1)
-
-def build_indicators(data):
-    ind = {}
-    for t in tickers:
-        df = pd.DataFrame(index=data.index)
-        df['Close'] = data[('Close', t)]
-        df['Open'] = data[('Open', t)]
-        df['High'] = data[('High', t)]
-        df['Low'] = data[('Low', t)]
-        df['Vol'] = data[('Volume', t)]
-        df['SMA50'] = df['Close'].rolling(50).mean()
-        df['SMA20'] = df['Close'].rolling(20).mean()
-        df['EMA20'] = df['Close'].ewm(span=20).mean()
-        df['SMA5'] = df['Close'].rolling(5).mean()
-        df['SMA200'] = df['Close'].rolling(200).mean()
-        df['AvgVol30'] = df['Vol'].rolling(30).mean()
-        df['Prior20High'] = df['Close'].rolling(20).max().shift(1)
-        tr = pd.concat([(df['High']-df['Low']), (df['High']-df['Close'].shift(1)).abs(), (df['Low']-df['Close'].shift(1)).abs()], axis=1).max(axis=1)
-        df['ATR14'] = tr.rolling(14).mean()
-        delta = df['Close'].diff()
-        rs = (delta.clip(lower=0).rolling(2).mean()) / (-delta.clip(upper=0).rolling(2).mean()).replace(0, np.nan)
-        df['RSI2'] = 100 - (100 / (1 + rs))
-        df['KC_UPPER'] = df['EMA20'] + 2 * df['ATR14']
-        df['KC_LOWER'] = df['EMA20'] - 2 * df['ATR14']
-        ind[t] = df
-    return ind, data[('Close', '^GSPC')], data[('Close', '^GSPC')].rolling(200).mean()
-
-# [Insert run_yang, run_zhan, and run_yin functions here from the previous step]
-
-# ==========================================
-# 2. METRICS & DASHBOARD
+# METRICS
 # ==========================================
 def compute_metrics(model):
     eq = pd.Series(model['equity_curve'])
     daily = pd.Series(model['daily_returns'])
     trades = model['trade_log']
-    
+
     running_peak = eq.cummax()
     drawdown = (eq - running_peak) / running_peak
-    
-    sharpe = (daily.mean() / daily.std()) * np.sqrt(252) if daily.std() != 0 else 0
-    
+
+    total_return = (eq.iloc[-1] - START_CAPITAL) / START_CAPITAL * 100
+    max_dd = drawdown.min() * 100
+
+    if daily.std() != 0:
+        sharpe = (daily.mean() / daily.std()) * np.sqrt(252)
+    else:
+        sharpe = 0
+
     downside = daily[daily < 0]
-    sortino = (daily.mean() / downside.std()) * np.sqrt(252) if len(downside) > 0 and downside.std() != 0 else 0
-    
+    if len(downside) > 0 and downside.std() != 0:
+        sortino = (daily.mean() / downside.std()) * np.sqrt(252)
+    else:
+        sortino = 0
+
     gross_profit = sum(tr['pnl'] for tr in trades if tr['pnl'] > 0)
     gross_loss = -sum(tr['pnl'] for tr in trades if tr['pnl'] < 0)
-    
+    profit_factor = gross_profit / gross_loss if gross_loss > 0 else np.nan
+
+    wins = sum(1 for tr in trades if tr['pnl'] > 0)
+    losses = sum(1 for tr in trades if tr['pnl'] < 0)
+    total_trades = wins + losses
+    win_rate = (wins / total_trades * 100) if total_trades > 0 else 0
+
     return {
         'name': model['name'],
-        'total_return': (eq.iloc[-1] - START_CAPITAL) / START_CAPITAL * 100,
-        'max_dd': drawdown.min() * 100,
+        'total_return': total_return,
+        'max_dd': max_dd,
         'sharpe': sharpe,
         'sortino': sortino,
-        'profit_factor': gross_profit / gross_loss if gross_loss > 0 else np.nan,
-        'win_rate': (sum(1 for tr in trades if tr['pnl'] > 0) / len(trades) * 100) if len(trades) > 0 else 0,
-        'total_trades': len(trades),
+        'profit_factor': profit_factor,
+        'win_rate': win_rate,
+        'total_trades': total_trades,
         'equity_curve': eq,
         'drawdown': drawdown,
         'trade_log': trades
     }
 
+# ==========================================
+# COMPARISON DASHBOARD
+# ==========================================
 def compare_models(results):
     metrics = [compute_metrics(r) for r in results]
-    
-    # Visuals
-    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(12, 10))
-    for m in metrics: ax1.plot(m['equity_curve'], label=m['name'])
-    ax1.set_title("Equity Curves")
-    for m in metrics: ax2.plot(m['drawdown'] * 100, label=m['name'])
-    ax2.set_title("Drawdowns (%)")
+
+    # Equity curves
+    plt.figure(figsize=(12,6))
+    for m in metrics:
+        plt.plot(m['equity_curve'], label=m['name'])
+    plt.title("Equity Curves — Yang vs Zhan vs Yin")
+    plt.legend()
+    plt.grid(True)
     plt.show()
-    
-    # Table
-    table = pd.DataFrame(metrics).drop(columns=['equity_curve', 'drawdown', 'trade_log'])
-    print("\n--- PERFORMANCE SUMMARY ---")
+
+    # Drawdowns
+    plt.figure(figsize=(12,4))
+    for m in metrics:
+        plt.plot(m['drawdown'] * 100, label=m['name'])
+    plt.title("Drawdown Comparison (%)")
+    plt.legend()
+    plt.grid(True)
+    plt.show()
+
+    # Performance table
+    table = pd.DataFrame({
+        'Model': [m['name'] for m in metrics],
+        'Total Return %': [m['total_return'] for m in metrics],
+        'Max Drawdown %': [m['max_dd'] for m in metrics],
+        'Sharpe': [m['sharpe'] for m in metrics],
+        'Sortino': [m['sortino'] for m in metrics],
+        'Profit Factor': [m['profit_factor'] for m in metrics],
+        'Win Rate %': [m['win_rate'] for m in metrics],
+        'Trades': [m['total_trades'] for m in metrics]
+    })
+
+    print("\n==============================")
+    print("MODEL PERFORMANCE COMPARISON")
+    print("==============================")
     print(table.to_string(index=False))
+
+    print("\n==============================")
+    print("STRATEGY RANKING (by Total Return)")
+    print("==============================")
+    ranked = table.sort_values(by='Total Return %', ascending=False)
+    print(ranked[['Model', 'Total Return %']].to_string(index=False))
+
+    # CSV exports
+    for m in metrics:
+        df = pd.DataFrame(m['trade_log'])
+        df.to_csv(f"{m['name'].lower()}_trades.csv", index=False)
+        print(f"Exported {m['name']} trades → {m['name'].lower()}_trades.csv")
 
 # ==========================================
 # MAIN
 # ==========================================
 if __name__ == "__main__":
-    raw_data = load_data()
-    ind, sp500, sp500_sma200 = build_indicators(raw_data)
-    compare_models([run_yang(ind, raw_data, sp500, sp500_sma200), 
-                    run_zhan(ind, raw_data, sp500, sp500_sma200), 
-                    run_yin(ind, raw_data, sp500, sp500_sma200)])
+    data = load_data()
+    ind, sp500, sp500_sma200 = build_indicators(data)
+
+    yang_results = run_yang(ind, data, sp500, sp500_sma200)
+    zhan_results = run_zhan(ind, data, sp500, sp500_sma200)
+    yin_results = run_yin(ind, data, sp500, sp500_sma200)
+
+    compare_models([yang_results, zhan_results, yin_results])
