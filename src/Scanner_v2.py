@@ -1,6 +1,6 @@
 # =====================================================================
 # SYSTEMATIC ALPHA MULTI-ASSET SCANNER
-# AUTHOR: QUANT RESEARCHER (AGE 15 PROTOTYPE V2.0 PRODUCTION)
+# AUTHOR: QUANT RESEARCHER (AGE IM NOT TELLING U PROTOTYPE V2.0 PRODUCTION)
 # =====================================================================
 
 # Step 1: Install and import required infrastructure
