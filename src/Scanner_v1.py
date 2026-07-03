@@ -153,5 +153,5 @@ with pd.ExcelWriter(file_name, engine='openpyxl') as writer:
         col_letter = col[0].column_letter
         worksheet.column_dimensions[col_letter].width = max(max_len + 4, 12)
 
-print(f"\n🚀 Success! Engineered '{file_name}' grid snapshot for {latest_date.date()}")
+print(f"\n Success! Engineered '{file_name}' grid snapshot for {latest_date.date()}")
 print(today_signals_clean.to_string(index=False))
