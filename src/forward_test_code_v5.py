@@ -11,12 +11,12 @@ from datetime import datetime
 # days_held is auto-incremented by 1 each run for any position already
 # present here, so you only need to paste in the correct starting value
 # the first time a position is added -- no need to bump it by hand daily.
-YANG_CASH, YANG_POSITIONS = 100035.72, {}
-ZHAN_CASH, ZHAN_POSITIONS = 100035.72, {}
-YIN_CASH, YIN_POSITIONS   = 100035.72, {}
+YANG_CASH, YANG_POSITIONS = 100000.00, {}
+ZHAN_CASH, ZHAN_POSITIONS = 100000.00, {}
+YIN_CASH, YIN_POSITIONS   = 100000.00, {}
 
 # INPUT THE TARGET EXCEL ROW NUMBER YOU ARE PASTING INTO TODAY
-TARGET_EXCEL_ROW = 3  # Change this to 4 tomorrow, 5 the next day, etc.
+TARGET_EXCEL_ROW = 2  # Change this to 4 tomorrow, 5 the next day, etc.
 
 START_CAPITAL = 100000.00
 RISK_PER_TRADE = 0.01
@@ -29,12 +29,18 @@ COMMISSION = 1.0
 RISK_FREE_ANNUAL = 0.045
 DAILY_RF = RISK_FREE_ANNUAL / 252
 
-TICKERS = ['MSFT','AMZN','JPM','UNH','XOM','WMT','NVDA','AMD','META','TSLA']
+# Paste this clean configuration block right over your old one
+TICKERS = ['MSFT', 'NVDA', 'AMZN', 'TSLA', 'JPM', 'GS', 'UNH', 'LLY', 'XOM', 'CAT', 'COST', 'WMT']
+
 SECTORS = {
-    'MSFT':'Tech','NVDA':'Tech','AMD':'Tech','META':'Tech',
-    'AMZN':'Consumer','TSLA':'Consumer','WMT':'Consumer',
-    'JPM':'Finance','UNH':'Healthcare','XOM':'Energy'
+    'MSFT': 'Tech', 'NVDA': 'Tech',
+    'AMZN': 'Consumer', 'TSLA': 'Consumer',
+    'JPM': 'Finance', 'GS': 'Finance',
+    'UNH': 'Healthcare', 'LLY': 'Healthcare',
+    'XOM': 'Energy', 'CAT': 'Industrials',
+    'COST': 'Staples', 'WMT': 'Staples'
 }
+
 
 def apply_entry_friction(price): return price * (1 + SLIPPAGE_ENTRY)
 def apply_exit_friction(price): return price * (1 - SLIPPAGE_EXIT)
@@ -50,7 +56,7 @@ def check_live_signals():
     print(f"LIVE TOURNAMENT EXECUTION DESK | RUNTIME: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} CDT")
     print("==============================================================================\n")
 
-    data = yf.download(TICKERS + ['^GSPC'], period="250d", progress=False)
+    data = yf.download(TICKERS + ['^GSPC'], period="3y", progress=False)
     if isinstance(data.columns, pd.MultiIndex):
         data.columns = data.columns.swaplevel(0, 1)
 
