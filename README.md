@@ -44,7 +44,7 @@ To ensure the statistical validity of the performance arrays across changing mar
 
 ---
 
-## 🛠️ Development Methodology & AI Collaboration Disclosure
+## Development Methodology & AI Collaboration Disclosure
 
 The core quantitative strategies, market regime logic, asset pricing constraints, risk parameters, and mathematical architecture of this simulation framework were authored entirely by the developer. 
 
