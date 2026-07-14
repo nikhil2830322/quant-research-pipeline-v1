@@ -1,5 +1,5 @@
 # ==============================================================================
-# ENSEMBLE - dynamic Yin/Yang/Zhan blend with regime + performance weighting
+# ENSEMBLE - dynamic Yin/Yang/Zhan blend with regime + performance weighting P. S THIS IS FLAWED STILL HAVE TO FIX
 # ==============================================================================
 def rolling_stats(series, window=30):
     s = pd.Series(series)
