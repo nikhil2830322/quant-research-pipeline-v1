@@ -103,7 +103,7 @@ The core quantitative strategies, market regime logic, asset pricing constraints
 Advanced AI-assisted engineering utilities were actively leveraged as a collaborative productivity framework to accelerate infrastructure build-times, optimize data-processing pipelines, and refactor procedural loops. The execution environment was strictly limited to a hyper-focused, non-integrated suite:
 1.  **Google Search AI Mode:** Utilized for rapid software documentation parsing and API syntax verification.
 2.  **Microsoft Copilot Browser Ecosystem:** Utilized for preliminary script scaffolding and layout parsing.
-3.  **Anthropic Claude 3.5 Sonnet (Medium Effort Tuning):** Utilized as an adversarial code auditor, state-machine verifier, and multi-dimensional NumPy array vectorization engine.
+3.  **Anthropic Claude 4.6 Sonnet (Low Effort Tuning):** Utilized as an adversarial code auditor, state-machine verifier, and multi-dimensional NumPy array vectorization engine.
 
 All system infrastructure files and calculation loops were audited line-by-line, verified programmatically against fatal runtime `KeyErrors`, and stress-tested manually to guarantee mathematical and logical design integrity.
 
