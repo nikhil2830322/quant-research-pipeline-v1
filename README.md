@@ -3,7 +3,7 @@
 *Current Phase: Active Live Out-of-Sample Forward Testing (Initiated July 9, 2026)*
 
 ---
-Contact Info: nikhilsai28303@gmail.com, nikhilsai28303@outlook.com, steamacc111112@outlook.com
+Contact Info: nikhilsai28303@gmail.com, nikhilsai28303@outlook.com,
 ## 📊 Multi-Regime Performance Sweep Results
 
 ### 1. 2007–2010 Era (Systemic Liquidity Crash / 2008 Financial Crisis)
