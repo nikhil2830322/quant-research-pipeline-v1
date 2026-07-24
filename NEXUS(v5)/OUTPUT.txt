@@ -1,0 +1,89 @@
+Launching backtest suite now...
+
+Compiling Point-in-Time S&P 500 asset history from Farrell's local file...
+Dynamic matrix initialized. Total active point-in-time pool size: 30 tickers.
+Downloading historical data (2007-01-01 to 2010-01-01) for 30 assets...
+[*********************100%***********************]  31 of 31 completed
+ERROR:yfinance:
+1 Failed download:
+ERROR:yfinance:['TSLA']: YFPricesMissingError('possibly delisted; no price data found  (1d 2007-01-01 -> 2010-01-01) (Yahoo error = "Data doesn\'t exist for startDate = 1167627600, endDate = 1262322000")')
+
+### RUN 1: Manual-Tracking Limits (original) ###
+    MAX_TOTAL_POSITIONS=6, MAX_ALLOC_FRACTION=1/6, MAX_SECTOR_POSITIONS=2
+
+### RUN 2: Unconstrained (no manual-tracking caps) ###
+    MAX_TOTAL_POSITIONS=30, MAX_ALLOC_FRACTION=1.0, MAX_SECTOR_POSITIONS=30
+
+### RUN 3: Ensemble (dynamic Yin/Yang/Zhan blend) ###
+
+Processing SPX Buy & Hold benchmark...
+
+==============================================================
+MODEL PERFORMANCE COMPARISON (including SPX benchmark)
+==============================================================
+               Model  Total Return %  Max Drawdown %  Sharpe  Sortino  Profit Factor  Win Rate %  Trades
+Yang (Manual Limits)           25.23           -6.48    0.63     1.00           1.46       33.33      69
+Zhan (Manual Limits)           13.95           -6.96    0.21     0.29           1.04       40.54      74
+ Yin (Manual Limits)           23.87           -9.70    0.65     1.10           1.36       55.38     260
+Yang (Unconstrained)           17.56          -12.22    0.32     0.47           1.11       33.33      93
+Zhan (Unconstrained)           28.57           -9.47    0.71     1.03           1.16       46.38      69
+ Yin (Unconstrained)           21.20          -12.32    0.37     0.68           1.05       50.23     219
+            Ensemble           18.17           -7.97    0.39     0.56           1.60       41.05      95
+      SPX Buy & Hold          -27.59          -56.34   -0.40    -0.63           1.00        0.00       0
+
+==============================================================
+STRATEGY RANKING (by Total Return)
+==============================================================
+               Model  Total Return %
+Zhan (Unconstrained)           28.57
+Yang (Manual Limits)           25.23
+ Yin (Manual Limits)           23.87
+ Yin (Unconstrained)           21.20
+            Ensemble           18.17
+Yang (Unconstrained)           17.56
+Zhan (Manual Limits)           13.95
+      SPX Buy & Hold          -27.59
+
+==============================================================
+ALPHA OVER SPX BUY & HOLD
+==============================================================
+Yang (Manual Limits)     :  +52.83% return vs SPX | +1.02 Sharpe vs SPX
+Zhan (Manual Limits)     :  +41.54% return vs SPX | +0.60 Sharpe vs SPX
+Yin (Manual Limits)      :  +51.46% return vs SPX | +1.05 Sharpe vs SPX
+Yang (Unconstrained)     :  +45.15% return vs SPX | +0.71 Sharpe vs SPX
+Zhan (Unconstrained)     :  +56.17% return vs SPX | +1.11 Sharpe vs SPX
+Yin (Unconstrained)      :  +48.80% return vs SPX | +0.76 Sharpe vs SPX
+Ensemble                 :  +45.76% return vs SPX | +0.78 Sharpe vs SPX
+Exported Yang (Manual Limits) trades -> yang_manual_limits_trades.csv
+Exported Zhan (Manual Limits) trades -> zhan_manual_limits_trades.csv
+Exported Yin (Manual Limits) trades -> yin_manual_limits_trades.csv
+Exported Yang (Unconstrained) trades -> yang_unconstrained_trades.csv
+Exported Zhan (Unconstrained) trades -> zhan_unconstrained_trades.csv
+Exported Yin (Unconstrained) trades -> yin_unconstrained_trades.csv
+Exported Ensemble trades -> ensemble_trades.csv
+
+Running Monte Carlo block-bootstrap analysis...
+
+==============================================================
+MONTE CARLO (block bootstrap, 5000 sims, block size 5 days)
+==============================================================
+               Model  Return P5%  Return P25%  Return Median%  Return P75%  Return P95%  Tail Risk DD% (P5)  Median Sharpe  % Sims Profitable  Actual Return%
+Yang (Manual Limits)        0.21        15.19           26.70        40.18        61.21              -15.96           0.70              95.16           25.23
+Zhan (Manual Limits)       -6.93         5.83           15.70        26.40        43.84              -18.47           0.29              86.02           13.95
+ Yin (Manual Limits)       -0.63        12.57           22.61        33.54        52.16              -15.20           0.62              94.42           23.87
+Yang (Unconstrained)       -7.72         7.26           19.61        33.31        54.67              -21.39           0.39              87.20           17.56
+Zhan (Unconstrained)        0.14        16.55           30.36        45.86        71.52              -18.47           0.78              95.14           28.57
+ Yin (Unconstrained)      -12.88         4.77           20.16        38.63        72.57              -25.87           0.35              81.68           21.20
+            Ensemble       -3.22         9.71           20.09        31.60        49.28              -16.52           0.48              91.70           18.17
+      SPX Buy & Hold      -63.03       -44.01          -25.81        -2.49        49.02              -68.91          -0.37              23.14          -27.59
+
+==============================================================
+P(STRATEGY PATH BEATS SPX PATH) -- independently resampled Monte Carlo runs
+==============================================================
+     Yang (Manual Limits): beats SPX in 90.9% of paired simulations
+     Zhan (Manual Limits): beats SPX in 87.7% of paired simulations
+      Yin (Manual Limits): beats SPX in 89.3% of paired simulations
+     Yang (Unconstrained): beats SPX in 88.5% of paired simulations
+     Zhan (Unconstrained): beats SPX in 92.6% of paired simulations
+      Yin (Unconstrained): beats SPX in 87.4% of paired simulations
+                 Ensemble: beats SPX in 89.0% of paired simulations
