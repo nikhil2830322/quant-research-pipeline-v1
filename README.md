@@ -79,11 +79,11 @@ evaluation_and_metrics
 
 ---
 
-## ⚡ CHOOSE YOUR EXECUTION TRACK (v3 Production vs. v4 Experimental)
+## ⚡ CHOOSE YOUR EXECUTION TRACK (v5 Production vs. v4 Experimental)
 
-### 🟢 TRACK 1: NEXUS v3 Production Baseline (Recommended)
+### 🟢 TRACK 1: NEXUS v5 Production Baseline (Recommended)
 *   **Target Scope:** Curated Point-in-Time Operational Portfolio (~26-31 Core Blue-Chip Monopolies).
-*   **Execution Time:** **~ 2 mins** for a full 3-year historical regime backtest.
+*   **Execution Time:** **~20 secs** for a full 3-year historical regime backtest.
 *   **Compute Required:** Low (Runs flawlessly on standard Google Colab free-tier CPU instances or baseline laptops).
 *   **Behavior:** Uses the **Institutional Intersection Filter Pass** at the harness perimeter gate. It cross-references Farrell's historical changes file rows against your operational core portfolio upfront. This completely erases survivorship bias (dropping `META` and `TSLA` dynamically from 2007 runs), but keeps the active dataframe indicators small, fast, and light.
 
