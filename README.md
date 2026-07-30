@@ -215,6 +215,8 @@ The strategies, architecture, research direction, and implementation are authore
 
 All systems were subsequently validated for runtime safety and implementation correctness.
 
+NEXUS is an end-to-end quantitative simulation platform architected to eliminate the structural biases that invalidate standard algorithmic testing and more. Developed independently using generative AI as an implementation compiler, the underlying financial theories—including point-in-time universe tracking to eliminate survivorship bias, regime-conditioned asset slot allocation, and path-synchronized block bootstrap stress-testing—were conceptualized entirely by the researcher. The platform demonstrates how advanced AI tooling can be harnessed as an engineering accelerator rather than a source of domain-specific alpha.
+
 ---
 
 # 📜 License
