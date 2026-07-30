@@ -1,490 +1,183 @@
-# NEXUS Engine v5
-## A Point-in-Time Adaptive Portfolio Research Framework
+Nexus Engine v5
+Point-in-Time Quantitative Research Framework
+Nexus Engine v5 is a research framework for testing systematic equity strategies under realistic historical constraints. The project was built around a simple question:
 
-![Python](https://img.shields.io/badge/Python-3.10+-blue.svg)
-![Research](https://img.shields.io/badge/Project-Quantitative%20Research-green.svg)
-![Backtesting](https://img.shields.io/badge/Framework-Point--in--Time%20Backtesting-orange.svg)
+Can a small set of rule-based trading hypotheses generate repeatable risk-adjusted returns when tested without hindsight bias?
 
----
+The engine combines three independent strategy models — Yang, Yin, and Zhan — with a regime-aware portfolio allocator, transaction cost modeling, point-in-time universe handling, and Monte Carlo stress testing.
 
-# Overview
+The goal is not to predict markets. The goal is to build a controlled environment where trading hypotheses can be tested, rejected, refined, and compared.
 
-NEXUS Engine v5 is a hypothesis-driven quantitative portfolio research framework designed to test whether multiple market behavior models can be combined into a regime-adaptive allocation system.
+Research Philosophy
+Most backtests fail because they accidentally answer the wrong question. Common issues include survivorship bias, unrealistic execution assumptions, excessive parameter tuning, and ignoring portfolio-level behavior.
 
-Rather than optimizing a single trading strategy, NEXUS separates the investment process into independent research components:
+Nexus Engine focuses on controlling those failure points:
 
-- **Signal hypotheses**
-- **Market regime classification**
-- **Portfolio allocation**
-- **Risk management**
-- **Transaction friction modeling**
-- **Robustness testing**
+Historical universe construction attempts to avoid selecting only today's winners.
+Indicators are calculated using only information available before each decision point.
+Entries and exits are executed using next-day market mechanics rather than same-day assumptions.
+Transaction friction, commissions, cash drag, and gap risk are modeled explicitly.
+Strategies are evaluated against both absolute performance and benchmark-relative outcomes.
+The system is designed as a hypothesis testing environment rather than a prediction model.
 
-The objective is not simply maximizing historical returns. The objective is determining whether different market behaviors can complement each other while controlling downside risk across different environments.
+Architecture Overview
+The engine is separated into several components:
 
----
+Strategy Layer
+Three independent trading models represent different market behaviors:
 
-# Research Philosophy
+Yang — Trend Following
+Yang attempts to capture persistent upward momentum.
 
-Markets exhibit different behavioral regimes.
+The model focuses on:
 
-A single strategy may perform well in one environment and fail in another:
+Breakouts above previous highs
+Relative volume confirmation
+Moving-average trend alignment
+Volatility-adjusted stops
+The hypothesis:
 
-| Market Environment | Expected Behavior |
-|---|---|
-| Strong trends | Momentum continuation |
-| Volatility expansion | Breakout continuation |
-| Temporary dislocations | Mean reversion |
-| Crisis environments | Capital preservation |
+Strong companies showing expanding momentum and participation may continue outperforming after confirmation.
 
-NEXUS models these behaviors independently through three rule-based research modules:
+Yin — Mean Reversion
+Yin targets temporary price dislocations inside longer-term uptrends.
 
+The model focuses on:
 
-            Market Data
-                |
-                v
-    +-------------------------+
-    |  Point-In-Time Engine   |
-    +-------------------------+
-                |
-                v
-    +-------------------------+
-    |  Signal Hypothesis Layer |
-    +-------------------------+
-      |          |          |
-      v          v          v
+Extreme short-term RSI weakness
+Long-term trend confirmation
+Volatility exhaustion filters
+Short holding periods
+The hypothesis:
 
-    Yang       Zhan       Yin
-   Trend    Volatility   Mean
-  Momentum  Expansion  Reversion
+Healthy assets experiencing temporary oversold conditions may revert toward their short-term equilibrium.
 
-      \          |          /
-       \         |         /
-        v        v        v
+Zhan — Volatility Expansion
+Zhan focuses on volatility contraction followed by directional expansion.
 
-    Regime Adaptive Allocator
+The model uses:
 
-                |
-                v
+Keltner Channel breakouts
+EMA structure
+Volume confirmation
+ATR-based risk management
+The hypothesis:
 
-      Portfolio Risk Engine
+Periods of compression can create conditions where directional expansion becomes more probable.
 
-                |
-                v
+Ensemble Engine
+The ensemble layer combines the three models instead of assuming one strategy works in every environment.
 
-      Monte Carlo Validation
+The allocator classifies the market into three regimes:
 
+Regime	Allocation Preference	Reasoning
+Bull	Yang weighted highest, Zhan secondary, Yin disabled	Strong trends favor momentum continuation
+Bear	Yin and defensive positioning favored	Avoids chasing broad market weakness
+Chop	Zhan prioritized, Yin secondary	Rangebound markets require selective setups
+These allocations are intentionally asymmetric. The system does not attempt to give every strategy equal influence because different market environments reward different behaviors.
 
----
+The design decision was to allow strategies to become inactive when their edge is theoretically weakest rather than forcing constant participation.
 
-# Core Architecture
-
-## 1. Point-In-Time Universe Construction
-
-NEXUS avoids using future information when constructing historical universes.
-
-The universe layer attempts to reproduce which assets were available during each historical period.
-
-Features:
-
-- Historical constituent tracking
-- Dynamic asset availability
-- IPO availability checks
-- Missing-data protection
-- Historical survivorship control
-
-Current validation uses a curated point-in-time tracked equity universe.
-
-Future versions will expand validation to the complete historical S&P 500 constituent database.
-
----
-
-# Strategy Hypotheses
-
-## Yang — Trend Momentum Model
-
-**Hypothesis:**
-
-> Persistent price trends combined with volume confirmation can generate positive risk-adjusted returns.
-
-Characteristics:
-
-- Moving-average trend filter
-- Breakout detection
-- Volume confirmation
-- ATR-based risk management
-- Trailing stop exits
-
-Primary environment:
-
-- Bull markets
-- Persistent directional trends
-
----
-
-## Zhan — Volatility Expansion Model
-
-**Hypothesis:**
-
-> Periods of volatility compression followed by expansion can identify asymmetric breakout opportunities.
-
-Characteristics:
-
-- Keltner channel expansion
-- EMA breakout detection
-- Volume regime analysis
-- Consolidation filtering
-- ATR trailing stops
-
-Primary environment:
-
-- Momentum transitions
-- Volatility expansion phases
-
----
-
-## Yin — Mean Reversion Model
-
-**Hypothesis:**
-
-> Short-term oversold conditions can recover when long-term structural trends remain intact.
-
-Characteristics:
-
-- RSI extreme detection
-- Long-term trend filter
-- Volatility protection
-- Short holding periods
-- Risk-defined entries
-
-Primary environment:
-
-- Pullbacks inside long-term uptrends
-- Market dislocations
-
----
-
-# Ensemble Allocation Engine
-
-NEXUS does not combine strategies through static weights.
-
-Instead, allocation changes dynamically according to market regime.
-
-## Regime Classification
-
-The engine classifies conditions into:
-
-- BULL
-- CHOP
-- BEAR
-
-Based on:
-
-- Price relative to moving averages
-- Market momentum
-- Realized volatility expansion
-
----
-
-# Dynamic Strategy Allocation
-
-Example allocation logic:
-
-## Bull Regime
-
-
-Yang: 70%
-Zhan: 30%
-Yin: 0%
-
-
-Focus:
-
-- Trend participation
-- Breakout continuation
-
----
-
-## Bear Regime
-
-
-Yang: 0%
-Zhan: 40%
-Yin: 60%
-
-
-Focus:
-
-- Defensive opportunities
-- Mean-reversion recovery
-
----
-
-## Chop Regime
-
-
-Yang: 15%
-Zhan: 55%
-Yin: 30%
-
-
-Focus:
-
-- Balanced opportunity capture
-
----
-
-# Risk Management Framework
-
-NEXUS includes multiple portfolio-level controls.
-
-## Position Sizing
-
-Risk-based sizing:
-
-- Maximum allocation limits
-- ATR-based stop distances
-- Risk-per-trade constraints
-
----
-
-## Portfolio Controls
-
-Includes:
-
-- Sector concentration limits
-- Maximum position counts
-- Cash drag modeling
-- Transaction friction
-- Slippage assumptions
-
----
-
-## Drawdown Guard
-
-The portfolio dynamically reduces exposure during significant losses.
-
-Example:
-
-
-Normal conditions:
-100% sizing
-
-Moderate drawdown:
-85% sizing
-
-Large drawdown:
-50% sizing
-
-Extreme drawdown:
-Capital preservation mode
-
-
----
-
-# Transaction Modeling
+Risk Management
+Risk controls operate at the portfolio level rather than only at the trade level.
 
 The framework includes:
 
-- Entry slippage
-- Exit slippage
-- Commission costs
-- Overnight gap risk
+ATR-based position sizing
+Maximum portfolio positions
+Sector concentration limits
+Portfolio drawdown scaling
+Volatility-based exposure adjustment
+Cash drag modeling
+Entry and exit friction
+Overnight gap handling
+Position size is determined by the smaller constraint between:
 
-Stops are not assumed to execute perfectly.
+Maximum loss allowed per trade
+Maximum portfolio allocation
+This prevents large positions from forming solely because volatility is temporarily low.
 
-If a security gaps below a stop level, execution occurs at the available market price.
+Point-in-Time Universe Construction
+A major source of historical backtest error is survivorship bias.
 
----
+For example, testing only today's largest companies ignores companies that previously existed in the index but later disappeared.
 
-# Validation Framework
+Nexus Engine attempts to address this through historical constituent tracking.
 
-NEXUS evaluates performance using multiple layers.
+The universe system supports:
 
-## Performance Metrics
+Historical membership changes
+IPO availability checks
+Dynamic asset availability
+Removal of unavailable securities from earlier periods
+Current testing uses a controlled historical basket rather than claiming to represent the complete historical S&P 500 universe.
 
-Calculated metrics:
+Execution Model
+The engine uses next-day execution assumptions:
 
-- Total return
-- Maximum drawdown
-- Sharpe ratio
-- Sortino ratio
-- Profit factor
-- Win rate
-- Trade statistics
+Signal generated using previous close data.
+Entry occurs using the following day's opening price.
+Exit logic evaluates previous information and executes using available market prices.
+Execution friction includes:
 
----
+Entry slippage
+Exit slippage
+Commission costs
+Gap-down stop behavior
+This prevents same-bar execution advantages that are unavailable in real trading.
 
-## Monte Carlo Robustness Testing
+Monte Carlo Stress Testing
+Backtest returns are not evaluated only from one historical sequence.
 
-The engine performs:
+The engine applies stationary block bootstrap Monte Carlo simulations.
 
-- 5,000 bootstrap simulations
-- Stationary block resampling
-- Return distribution analysis
-- Drawdown stress testing
-- Paired benchmark comparison
+Parameters:
 
-The objective:
+5,000 simulations
+Five-day return blocks
+Synchronized benchmark comparisons
+The simulations measure:
 
-> Determine whether observed performance survives alternate market path sequences.
+Return distribution
+Drawdown distribution
+Sharpe distribution
+Probability of positive outcomes
+Probability of outperforming the benchmark path
+Monte Carlo results are treated as robustness analysis, not proof of future performance.
 
----
-
-# Example Validation Results
-
-## Test Period
-
+Example Validation Results
+Testing period:
 
 2007-01-01 to 2010-01-01
 
+Market environment:
 
-This period includes:
+Included the 2008 financial crisis
+Compared against S&P 500 buy-and-hold performance
+Model	Return	Max Drawdown	Sharpe	Trades
+Yang (Manual Limits)	25.23%	-6.48%	0.63	69
+Zhan (Manual Limits)	13.95%	-6.96%	0.21	74
+Yin (Manual Limits)	23.87%	-9.70%	0.65	260
+Ensemble	18.17%	-7.97%	0.39	95
+S&P 500 Buy & Hold	-27.59%	-56.34%	-0.40	—
+The individual strategies and ensemble should not be interpreted as guarantees of future returns. These results represent a single historical sample used to evaluate whether the underlying hypotheses behaved as expected.
 
-- 2008 Financial Crisis
-- Extreme volatility expansion
-- Severe market drawdown
+Current Limitations
+This project is still a research system.
 
----
+Known limitations:
 
-## Benchmark
+The current point-in-time universe is a controlled dataset, not a complete historical reconstruction of every S&P 500 constituent.
+Parameter selection has not been fully separated into training and validation periods.
+Additional market environments are required before drawing conclusions about robustness.
+Real-world execution would introduce additional constraints including liquidity, spreads, and market impact.
+Future Development
+Potential extensions:
 
-
-S&P 500 Buy & Hold
-
-Return:
--27.59%
-
-Maximum Drawdown:
--56.34%
-
-Sharpe:
--0.40
-
-
----
-
-## Strategy Results
-
-| Model | Return | Max DD | Sharpe |
-|-|-:|-:|-:|
-| Yang Manual | +25.23% | -6.48% | 0.63 |
-| Zhan Manual | +13.95% | -6.96% | 0.21 |
-| Yin Manual | +23.87% | -9.70% | 0.65 |
-| Ensemble | +18.17% | -7.97% | 0.39 |
-
----
-
-# Monte Carlo Results
-
-Example:
-
-| Model | Profitable Simulations |
-|-|-:|
-| Yang Manual | 95.16% |
-| Yin Manual | 94.42% |
-| Zhan Unconstrained | 95.14% |
-| Ensemble | 91.70% |
-
-Paired path testing:
-
-
-Probability of beating SPX:
-
-Yang Manual:
-90.9%
-
-Ensemble:
-89.0%
-
-
----
-
-# Important Limitations
-
-NEXUS is a research framework, not a production trading system.
-
-Current limitations:
-
-## Universe Coverage
-
-Current testing uses a curated point-in-time tracked equity universe.
-
-A full historical S&P 500 constituent reconstruction remains future work.
-
----
-
-## Historical Validation
-
-Current results represent limited historical periods.
-
-Additional testing required:
-
-- Multiple market cycles
-- Different asset universes
-- Walk-forward validation
-- Out-of-sample periods
-
----
-
-## Parameter Selection
-
-Parameters are hypothesis-driven.
-
-No machine-learning optimization or parameter mining was performed.
-
-Future versions should evaluate:
-
-- Parameter sensitivity
-- Robustness surfaces
-- Walk-forward optimization
-
----
-
-# Project Goals
-
-Future development:
-
-## Research Improvements
-
-- Full historical S&P 500 reconstruction
-- Multi-period validation
-- Automated experiment tracking
-- Strategy attribution analysis
-
-## Portfolio Improvements
-
-- More asset classes
-- Dynamic correlation modeling
-- Volatility targeting improvements
-- Exposure attribution
-
----
-
-# Key Design Principles
-
-NEXUS follows several principles:
-
-1. **Avoid future information**
-2. **Separate hypothesis from allocation**
-3. **Model realistic execution**
-4. **Measure robustness, not only returns**
-5. **Prefer explainable systems over opaque optimization**
-
----
-
-# Conclusion
-
-NEXUS Engine v5 demonstrates a framework for combining multiple market hypotheses into an adaptive portfolio research system.
-
-The project focuses on a central quantitative research question:
-
-> Can independently designed market behavior models be dynamically allocated to produce more robust outcomes than isolated strategies?
-
-The answer requires continued validation, but the framework provides the infrastructure needed to test that question rigorously.
-
----
-
-# Author Notes
-
-NEXUS Engine is an ongoing quantitative research project focused on systematic strategy design, portfolio construction, and robustness analysis.
+Full historical S&P 500 constituent database integration
+Walk-forward optimization
+Out-of-sample validation periods
+More realistic liquidity constraints
+Portfolio correlation controls
+Additional asset classes
+Live paper
