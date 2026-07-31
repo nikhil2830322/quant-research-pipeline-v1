@@ -300,3 +300,5 @@ Nexus Engine v5 is an attempt to bridge the gap between simple trading scripts a
 The core principle is:
 
 > Create explicit hypotheses, test them honestly, measure failure modes, and improve the system based on evidence rather than assumptions.
+
+Inludes: 14 generations of a self-taught, modular quantitative research pipeline (NEXUS v5) including vectorized path-synchronized Monte Carlo simulations.
