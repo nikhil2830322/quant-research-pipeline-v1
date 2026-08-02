@@ -301,14 +301,15 @@ The core principle is:
 
 > Create explicit hypotheses, test them honestly, measure failure modes, and improve the system based on evidence rather than assumptions.
 
-| Component                   | Ownership           |
-| --------------------------- | ------------------- |
-| Research questions          | Student-designed    |
-| Financial hypotheses        | Student-designed    |
-| Risk framework              | Student-designed    |
-| Validation methodology      | Student-designed    |
-| Implementation acceleration | AI-assisted         |
-| Future reconstruction       | Independent rebuild |
+| Component                               | Role                            |
+| --------------------------------------- | ------------------------------- |
+| Research direction                      | Independently designed          |
+| Financial hypotheses                    | Independently designed          |
+| Risk framework                          | Independently designed          |
+| Validation methodology                  | Independently designed          |
+| Coding assistance                       | AI-assisted                     |
+| Mathematical and systems reconstruction | Ongoing independent development |
+
 
 
 Inludes: 14 generations of a self-taught, modular quantitative research pipeline (NEXUS v5) including vectorized path-synchronized Monte Carlo simulations.
